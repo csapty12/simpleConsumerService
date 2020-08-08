@@ -1,0 +1,10 @@
+aws:
+  accessKey: foo
+  secretKey: bar
+  region: eu-central-1
+
+sqs:
+  url: http://localhost:4576/000000000000/my_queue
+#  url: http://localhost:4576/000000000000/my_queue
+
+
