@@ -6,9 +6,14 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
 import com.amazonaws.services.sqs.model.DeleteMessageRequest;
+import com.amazonaws.services.sqs.model.GetQueueUrlResult;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
+import com.example.aws.simpleConsumerService.model.Customer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -19,54 +24,43 @@ import java.util.List;
 @Slf4j
 public class ConsumerService {
 
-	@Value("${sqs.url}")
-	private String sqsUrl;
+	@Autowired
+	private ObjectMapper objectMapper;
 
-	@Value("${aws.accessKey}")
-	private String awsAccessKey;
-
-	@Value("${aws.secretKey}")
-	private String awsSecretKey;
-
-	@Value("${aws.region}")
-	private String awsRegion;
-
+	@Autowired
 	private AmazonSQS amazonSQS;
 
-	@PostConstruct
-	private void postConstructor() {
-
-		log.info("SQS URL: " + sqsUrl);
-
-		AWSCredentialsProvider awsCredentialsProvider = new AWSStaticCredentialsProvider(
-				new BasicAWSCredentials(awsAccessKey, awsSecretKey)
-		);
-
-		this.amazonSQS = AmazonSQSClientBuilder.standard().withCredentials(awsCredentialsProvider).build();
-	}
 
 	public void customerListener() {
-		final ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(sqsUrl)
+		String queueUrl = amazonSQS.getQueueUrl("my-first-queue").getQueueUrl();
+		System.out.println(queueUrl);
+
+
+		final ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(queueUrl)
 				.withMaxNumberOfMessages(1)
 				.withWaitTimeSeconds(3);
-
+//
 		while (true) {
 
 			final List<Message> messages = amazonSQS.receiveMessage(receiveMessageRequest).getMessages();
-
+			Customer receivedCustomer = null;
 			for (Message messageObject : messages) {
-				String message = messageObject.getBody();
+				try {
+					receivedCustomer = objectMapper.readValue(messageObject.getBody(), Customer.class);
+				} catch (JsonProcessingException e) {
+					e.printStackTrace();
+				}
 
-				log.info("Received message: " + message);
+				log.info("Received message: " + receivedCustomer);
 
-				deleteMessage(messageObject);
+				deleteMessage(queueUrl, messageObject);
 			}
 		}
 	}
 
-	private void deleteMessage(Message messageObject) {
+	private void deleteMessage(String queueUrl, Message messageObject) {
 
 		final String messageReceiptHandle = messageObject.getReceiptHandle();
-		amazonSQS.deleteMessage(new DeleteMessageRequest(sqsUrl, messageReceiptHandle));
+		amazonSQS.deleteMessage(new DeleteMessageRequest(queueUrl, messageReceiptHandle));
 	}
 }
